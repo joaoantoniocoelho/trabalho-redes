@@ -29,7 +29,7 @@ public class UDPServer {
 
             if (sequenceNumber == expectedSequenceNumber && verifyCRC(content.getBytes(), receivedCrc)) {
                 System.out.println("Received packet: Sequence Number = " + sequenceNumber + ", Content = '" + content + "', Size = " + content.length() + " bytes");
-                
+
                 if (content.trim().equals("SYN")) {
                     originalFileName = null;
                     fileContent.setLength(0);
@@ -43,7 +43,6 @@ public class UDPServer {
                         System.out.println("MD5 hash check passed.");
                     } else {
                         System.out.println("MD5 hash check failed.");
-                        
                     }
                     sendAck(sequenceNumber + 1, receivedPacket.getAddress(), receivedPacket.getPort());
                     expectedSequenceNumber++;
@@ -53,6 +52,9 @@ public class UDPServer {
                     saveFile(fileContent.toString(), originalFileName);
                     System.out.println("Connection closed by FIN.");
                     sendAck(sequenceNumber + 1, receivedPacket.getAddress(), receivedPacket.getPort());
+
+                    // Enviar mensagem de fechamento de conexão
+                    sendCloseMessage(receivedPacket.getAddress(), receivedPacket.getPort());
                     break;
                 } else {
                     fileContent.append(content.trim()); // Append the packet content trimming the padding
@@ -86,6 +88,14 @@ public class UDPServer {
         DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, address, port);
         serverSocket.send(sendPacket);
         System.out.println("Sent ACK for Sequence Number: " + sequenceNumber);
+    }
+
+    private static void sendCloseMessage(InetAddress address, int port) throws IOException {
+        String closeMessage = "CLOSE";
+        byte[] sendData = closeMessage.getBytes();
+        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, address, port);
+        serverSocket.send(sendPacket);
+        System.out.println("Sent CLOSE message to client.");
     }
 
     private static DatagramPacket receivePacket() throws IOException {

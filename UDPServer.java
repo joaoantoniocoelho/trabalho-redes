@@ -1,8 +1,11 @@
 import java.io.*;
 import java.net.*;
 import java.nio.file.*;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.UUID;
 import java.util.zip.CRC32;
+import java.util.HexFormat;
 
 public class UDPServer {
     private static final int PORT = 9876;
@@ -15,6 +18,7 @@ public class UDPServer {
 
         String originalFileName = null;
         StringBuilder fileContent = new StringBuilder();
+        String expectedHash = null;
 
         while (true) {
             DatagramPacket receivedPacket = receivePacket();
@@ -23,23 +27,35 @@ public class UDPServer {
             long receivedCrc = Long.parseLong(message.split(":")[1]);
             String content = message.substring(message.indexOf(':', message.indexOf(':') + 1) + 1);
 
-            int packetSize = content.length(); // Calcula o tamanho do conteúdo do pacote ANTES de trim()
-
-            if (sequenceNumber == expectedSequenceNumber && verifyCRC(content, receivedCrc)) {
-                System.out.println("Received packet: Sequence Number = " + sequenceNumber + ", Content = '" + content + "', Size = " + packetSize + " bytes");
+            if (sequenceNumber == expectedSequenceNumber && verifyCRC(content.getBytes(), receivedCrc)) {
+                System.out.println("Received packet: Sequence Number = " + sequenceNumber + ", Content = '" + content + "', Size = " + content.length() + " bytes");
                 
-                if (sequenceNumber == 0 && content.trim().equals("SYN")) {
+                if (content.trim().equals("SYN")) {
                     originalFileName = null;
                     fileContent.setLength(0);
                 } else if (sequenceNumber == 1) {
                     originalFileName = content.trim();
+                } else if (content.startsWith("HASH:")) {
+                    // apenas avise que recebeu, envie ack e continue
+                    expectedHash = content.split(":")[1];
+
+                    if (verifyMD5(fileContent.toString(), expectedHash)) {
+                        System.out.println("MD5 hash check passed.");
+                    } else {
+                        System.out.println("MD5 hash check failed.");
+                        
+                    }
+                    sendAck(sequenceNumber + 1, receivedPacket.getAddress(), receivedPacket.getPort());
+                    expectedSequenceNumber++;
+                    continue;
+
                 } else if (content.trim().equals("FIN")) {
                     saveFile(fileContent.toString(), originalFileName);
                     System.out.println("Connection closed by FIN.");
                     sendAck(sequenceNumber + 1, receivedPacket.getAddress(), receivedPacket.getPort());
                     break;
                 } else {
-                    fileContent.append(content.trim()); // Aqui aplica trim ao reconstruir o conteúdo do arquivo
+                    fileContent.append(content.trim()); // Append the packet content trimming the padding
                 }
                 sendAck(sequenceNumber + 1, receivedPacket.getAddress(), receivedPacket.getPort());
                 expectedSequenceNumber++;
@@ -51,10 +67,17 @@ public class UDPServer {
         serverSocket.close();
     }
 
-    private static boolean verifyCRC(String content, long receivedCrc) {
+    private static boolean verifyCRC(byte[] content, long receivedCrc) {
         CRC32 crc = new CRC32();
-        crc.update(content.getBytes());
+        crc.update(content);
         return crc.getValue() == receivedCrc;
+    }
+
+    private static boolean verifyMD5(String content, String receivedHash) throws NoSuchAlgorithmException {
+        MessageDigest md = MessageDigest.getInstance("MD5");
+        byte[] digest = md.digest(content.getBytes());
+        String calculatedHash = HexFormat.of().formatHex(digest);
+        return calculatedHash.equals(receivedHash);
     }
 
     private static void sendAck(int sequenceNumber, InetAddress address, int port) throws IOException {

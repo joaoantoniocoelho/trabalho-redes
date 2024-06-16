@@ -2,6 +2,8 @@ import java.io.*;
 import java.net.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -66,6 +68,10 @@ public class UDPClient {
     }
 
     private static void sendPacket(String content, int seqNum) throws IOException {
+        if (clientSocket.isClosed()) {
+            System.out.println("Socket is closed, cannot send packet.");
+            return; 
+        }
         byte[] dataBytes = content.getBytes();
         long crcValue = calculateCRC(dataBytes);
         String packet = seqNum + ":" + crcValue + ":" + content;  // Incluindo CRC no pacote
@@ -76,6 +82,7 @@ public class UDPClient {
         sentPackets.put(seqNum, content);
         scheduleTimeout(seqNum);
     }
+    
 
     private static void waitForAck() throws IOException {
         while (ackedPackets.size() < sentPackets.size()) {
@@ -126,17 +133,28 @@ public class UDPClient {
             System.out.println("Congestion Avoidance: cwnd incremented to " + cwnd);
         }
     }
-
-    private static void startHandShaking(String fileName, byte[] fileData) throws IOException {
+    private static void startHandShaking(String fileName, byte[] fileData) throws IOException, NoSuchAlgorithmException {
         sendPacket("SYN", 0);
         waitForAck();
-
+    
         sendPacket(fileName, 1);
         waitForAck();
-
+    
         sendData(fileData);
-
+    
+        // Enviar o hash MD5 do arquivo antes de enviar o FIN
+        String fileHash = calculateMD5(fileData);
+        sendPacket("HASH:" + fileHash, sequenceNumber.getAndIncrement());
+        waitForAck();
+    
+        // Agora enviar FIN como o último pacote para fechar a conexão
         sendPacket("FIN", sequenceNumber.getAndIncrement());
         waitForAck();
+    }
+    
+    private static String calculateMD5(byte[] fileData) throws NoSuchAlgorithmException {
+        MessageDigest md = MessageDigest.getInstance("MD5");
+        byte[] digest = md.digest(fileData);
+        return HexFormat.of().formatHex(digest);
     }
 }

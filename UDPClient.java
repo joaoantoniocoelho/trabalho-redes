@@ -99,7 +99,15 @@ public class UDPClient {
                 if (!ackedPackets.contains(sequenceNumber) && sentPackets.containsKey(sequenceNumber)) {
                     try {
                         System.out.println("Timeout, resending sequence number: " + sequenceNumber);
-                        sendPacket(sentPackets.get(sequenceNumber), sequenceNumber); // Reenviar pacote
+    
+                        // Resetar a janela de congestionamento para 1
+                        cwnd = 1;
+                        // Reduzir o limiar pela metade, não menor que 2
+                        threshold = Math.max(threshold / 2, 2);
+                        System.out.println("Timeout occurred: cwnd reset to 1, threshold set to " + threshold);
+    
+                        // Reenviar o pacote
+                        sendPacket(sentPackets.get(sequenceNumber), sequenceNumber);
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
@@ -107,6 +115,7 @@ public class UDPClient {
             }
         }, INITIAL_TIMEOUT);
     }
+    
 
     private static void manageCongestionControl() {
         if (cwnd < threshold) {

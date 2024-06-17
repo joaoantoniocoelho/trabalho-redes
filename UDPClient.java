@@ -57,7 +57,6 @@ public class UDPClient {
                 start += PACKET_SIZE;
             }
             waitForAck();
-            manageCongestionControl();
         }
     }
 
@@ -96,6 +95,7 @@ public class UDPClient {
                 int ackNum = Integer.parseInt(response.split(" ")[1]);
                 ackedPackets.add(ackNum);
                 sentPackets.remove(ackNum);
+                manageCongestionControl();
             }
         }
     }

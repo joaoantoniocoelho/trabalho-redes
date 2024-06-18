@@ -8,7 +8,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.CRC32;
-import java.util.HexFormat;
 
 public class UDPClient {
     private static DatagramSocket clientSocket;
@@ -16,6 +15,8 @@ public class UDPClient {
     private static final int SERVER_PORT = 9876;
     private static final int PACKET_SIZE = 10; // Tamanho fixo de cada pacote
     private static final long INITIAL_TIMEOUT = 1000; // Timeout inicial em milissegundos
+    private static final double LOSS_PROBABILITY = 0.5; // probabilidade de perda de pacotes
+    private static final Random random = new Random();
 
     private static int cwnd = 1; // Janela de congestionamento inicial
     private static int threshold = 64; // Limiar de congestionamento
@@ -78,10 +79,18 @@ public class UDPClient {
         String packet = seqNum + ":" + crcValue + ":" + content;  // Incluindo CRC no pacote
         byte[] sendData = packet.getBytes();
         DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, SERVER_PORT);
-        clientSocket.send(sendPacket);
-        System.out.println("Sent: " + packet);
-        sentPackets.put(seqNum, content);
-        scheduleTimeout(seqNum);
+
+        // Simulação de perda de pacotes
+        if (random.nextDouble() >= LOSS_PROBABILITY) {
+            clientSocket.send(sendPacket);
+            System.out.println("Sent: " + packet);
+            sentPackets.put(seqNum, content);
+            scheduleTimeout(seqNum);
+        } else {
+            // Retransmitir o pacote perdido
+            System.out.println("Packet loss, sequence number: " + seqNum);
+            sendPacket(content, seqNum);
+        }
     }
 
     private static void waitForAck() throws IOException {

@@ -10,6 +10,7 @@ import java.util.HexFormat;
 public class UDPServer {
     private static final int PORT = 9876;
     private static DatagramSocket serverSocket;
+    // O servidor espera receber pacotes com sequência de números crescentes
     private static int expectedSequenceNumber = 0;
 
     public static void main(String args[]) throws Exception {
@@ -25,8 +26,11 @@ public class UDPServer {
             String message = new String(receivedPacket.getData(), 0, receivedPacket.getLength());
             int sequenceNumber = Integer.parseInt(message.split(":")[0]);
             long receivedCrc = Long.parseLong(message.split(":")[1]);
+
+            // Formato da mensagem: <sequence_number>:<crc>:<content>
             String content = message.substring(message.indexOf(':', message.indexOf(':') + 1) + 1);
 
+            // Se o pacote recebido tem o número de sequência esperado e o CRC é válido, o servidor processa o pacote
             if (sequenceNumber == expectedSequenceNumber && verifyCRC(content.getBytes(), receivedCrc)) {
                 System.out.println("Received packet: Sequence Number = " + sequenceNumber + ", Content = '" + content + "', Size = " + content.length() + " bytes");
 
@@ -36,21 +40,28 @@ public class UDPServer {
                 } else if (sequenceNumber == 1) {
                     originalFileName = content.trim();
                 } else if (content.startsWith("HASH:")) {
+                    // Formato da mensagem: HASH:<md5_hash>
+                    // Recupera o hash esperado para o conteúdo do arquivo
                     expectedHash = content.split(":")[1];
 
                     if (verifyMD5(fileContent.toString(), expectedHash)) {
+                        // Se o hash MD5 do conteúdo do arquivo recebido é igual ao hash esperado, o servidor envia um ACK
                         System.out.println("MD5 hash check passed.");
                     } else {
                         System.out.println("MD5 hash check failed.");
                     }
+                    // Envia ACK para o cliente
                     sendAck(sequenceNumber + 1, receivedPacket.getAddress(), receivedPacket.getPort());
                     Thread.sleep(500);  
                     expectedSequenceNumber++;
                     continue;
                 } else if (content.trim().equals("FIN")) {
+                    // Ao receber o pacote FIN, o servidor salva o conteúdo do arquivo e envia um ACK
                     saveFile(fileContent.toString(), originalFileName);
                     System.out.println("Connection closed by FIN.");
                     sendAck(sequenceNumber + 1, receivedPacket.getAddress(), receivedPacket.getPort());
+
+                    // Envia mensagem CLOSE para o cliente e encerra a conexão
                     sendCloseMessage(receivedPacket.getAddress(), receivedPacket.getPort());
                     Thread.sleep(500);  
                     break;

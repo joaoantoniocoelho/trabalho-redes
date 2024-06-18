@@ -14,7 +14,7 @@ public class UDPClient {
     private static InetAddress IPAddress;
     private static final int SERVER_PORT = 9876;
     private static final int PACKET_SIZE = 10; // Tamanho fixo de cada pacote
-    private static final long INITIAL_TIMEOUT = 1000; // Timeout inicial em milissegundos
+    private static final long INITIAL_TIMEOUT = 10000; // Timeout inicial em milissegundos
     private static final double LOSS_PROBABILITY = 0.5; // probabilidade de perda de pacotes
     private static final Random random = new Random();
 
@@ -41,7 +41,7 @@ public class UDPClient {
         waitForCloseMessage(clientSocket);
     }
 
-    private static void sendData(byte[] fileData) throws IOException {
+    private static void sendData(byte[] fileData) throws IOException, InterruptedException {
         int start = 0;
         while (start < fileData.length) {
             while (start < fileData.length && sentPackets.size() < cwnd) {
@@ -56,6 +56,7 @@ public class UDPClient {
 
                 sendPacket(new String(packetData), sequenceNumber.getAndIncrement());
                 start += PACKET_SIZE;
+                Thread.sleep(500);
             }
             waitForAck();
         }
@@ -73,7 +74,7 @@ public class UDPClient {
         return HexFormat.of().formatHex(digest);
     }
 
-    private static void sendPacket(String content, int seqNum) throws IOException {
+    private static void sendPacket(String content, int seqNum) throws IOException, InterruptedException {
         byte[] dataBytes = content.getBytes();
         long crcValue = calculateCRC(dataBytes);
         String packet = seqNum + ":" + crcValue + ":" + content;  // Incluindo CRC no pacote
@@ -91,9 +92,11 @@ public class UDPClient {
             System.out.println("Packet loss, sequence number: " + seqNum);
             sendPacket(content, seqNum);
         }
+
+        Thread.sleep(500);
     }
 
-    private static void waitForAck() throws IOException {
+    private static void waitForAck() throws IOException, InterruptedException {
         while (ackedPackets.size() < sentPackets.size()) {
             byte[] receiveData = new byte[1024];
             DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
@@ -105,6 +108,8 @@ public class UDPClient {
                 ackedPackets.add(ackNum);
                 sentPackets.remove(ackNum);
                 manageCongestionControl();
+                System.out.println("Received ACK for sequence number: " + ackNum);
+                Thread.sleep(500);
             }
         }
     }
@@ -124,7 +129,13 @@ public class UDPClient {
                         System.out.println("Timeout occurred: cwnd reset to 1, threshold set to " + threshold);
 
                         // Reenviar o pacote
-                        sendPacket(sentPackets.get(sequenceNumber), sequenceNumber);
+                        try {
+                            sendPacket(sentPackets.get(sequenceNumber), sequenceNumber);
+                            Thread.sleep(500);
+
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
@@ -143,7 +154,7 @@ public class UDPClient {
         }
     }
 
-    private static void startHandShaking(String fileName, byte[] fileData) throws IOException, NoSuchAlgorithmException {
+    private static void startHandShaking(String fileName, byte[] fileData) throws IOException, NoSuchAlgorithmException, InterruptedException {
         sendPacket("SYN", 0);
         waitForAck();
 
@@ -162,7 +173,7 @@ public class UDPClient {
         waitForAck();
     }
 
-    private static void waitForCloseMessage(DatagramSocket clientSocket) throws IOException {
+    private static void waitForCloseMessage(DatagramSocket clientSocket) throws IOException, InterruptedException {
         while (true) {
             byte[] receiveData = new byte[1024];
             DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
@@ -175,6 +186,7 @@ public class UDPClient {
                 System.exit(0);
                 break;
             }
+            Thread.sleep(500);
         }
     }
 }

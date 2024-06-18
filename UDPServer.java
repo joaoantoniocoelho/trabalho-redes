@@ -36,7 +36,6 @@ public class UDPServer {
                 } else if (sequenceNumber == 1) {
                     originalFileName = content.trim();
                 } else if (content.startsWith("HASH:")) {
-                    // apenas avise que recebeu, envie ack e continue
                     expectedHash = content.split(":")[1];
 
                     if (verifyMD5(fileContent.toString(), expectedHash)) {
@@ -45,16 +44,15 @@ public class UDPServer {
                         System.out.println("MD5 hash check failed.");
                     }
                     sendAck(sequenceNumber + 1, receivedPacket.getAddress(), receivedPacket.getPort());
+                    Thread.sleep(500);  
                     expectedSequenceNumber++;
                     continue;
-
                 } else if (content.trim().equals("FIN")) {
                     saveFile(fileContent.toString(), originalFileName);
                     System.out.println("Connection closed by FIN.");
                     sendAck(sequenceNumber + 1, receivedPacket.getAddress(), receivedPacket.getPort());
-
-                    // Enviar mensagem de fechamento de conexão
                     sendCloseMessage(receivedPacket.getAddress(), receivedPacket.getPort());
+                    Thread.sleep(500);  
                     break;
                 } else {
                     fileContent.append(content.trim()); // Append the packet content trimming the padding
@@ -64,6 +62,7 @@ public class UDPServer {
             } else {
                 System.out.println("CRC check failed or unexpected sequence number. Packet discarded.");
             }
+            Thread.sleep(500);  
         }
 
         serverSocket.close();
@@ -82,20 +81,13 @@ public class UDPServer {
         return calculatedHash.equals(receivedHash);
     }
 
-    private static void sendAck(int sequenceNumber, InetAddress address, int port) throws IOException {
+    private static void sendAck(int sequenceNumber, InetAddress address, int port) throws IOException, InterruptedException {
         String ack = "ACK " + sequenceNumber;
         byte[] sendData = ack.getBytes();
         DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, address, port);
         serverSocket.send(sendPacket);
         System.out.println("Sent ACK for Sequence Number: " + sequenceNumber);
-    }
-
-    private static void sendCloseMessage(InetAddress address, int port) throws IOException {
-        String closeMessage = "CLOSE";
-        byte[] sendData = closeMessage.getBytes();
-        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, address, port);
-        serverSocket.send(sendPacket);
-        System.out.println("Sent CLOSE message to client.");
+        Thread.sleep(500);  // Pause after sending ACK
     }
 
     private static DatagramPacket receivePacket() throws IOException {
@@ -105,7 +97,7 @@ public class UDPServer {
         return receivePacket;
     }
 
-    private static void saveFile(String content, String originalFileName) throws IOException {
+    private static void saveFile(String content, String originalFileName) throws IOException, InterruptedException {
         File directory = new File("received_files");
         if (!directory.exists()) {
             directory.mkdir();
@@ -113,5 +105,14 @@ public class UDPServer {
         String newFileName = directory.getAbsolutePath() + File.separator + UUID.randomUUID().toString() + "-" + originalFileName + ".txt";
         Files.write(Paths.get(newFileName), content.getBytes());
         System.out.println("File saved as " + newFileName);
+        Thread.sleep(500); 
+    }
+
+    private static void sendCloseMessage(InetAddress address, int port) throws IOException {
+        String closeMessage = "CLOSE";
+        byte[] sendData = closeMessage.getBytes();
+        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, address, port);
+        serverSocket.send(sendPacket);
+        System.out.println("Sent CLOSE message to client.");
     }
 }
